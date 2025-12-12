@@ -50,7 +50,7 @@ exports.notificarNuevoLead = async (req, res) => {
     console.log(`✅ Procesando nuevo lead: ${data.email}`);
 
     // 3. Preparar el correo (Tu diseño bonito)
-    const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
+    const destinatarioVentas = "contacto@pida-ai.com, durquilla@pida-ai.com, fgalaviz@iiresodh.org, cumapineiros@gmail.com";
     const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const mailOptions = {
