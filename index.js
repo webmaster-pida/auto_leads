@@ -52,13 +52,13 @@ exports.notificarNuevoLead = async (cloudEvent) => {
       return;
     }
 
-    const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
+    const destinatarioVentas = process.env.EMAIL_VENTAS || "contacto@pida-ai.com";
     
     const mailOptions = {
       from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
       to: destinatarioVentas,
       replyTo: data.email,
-      subject: `🚀 Nuevo Lead: ${data.company || "Empresa"}`,
+      subject: `🚀 Nuevo Lead: ${data.company || "PIDA"}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #1D3557;">Nuevo Cliente Potencial</h2>
