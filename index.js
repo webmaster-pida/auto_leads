@@ -1,8 +1,14 @@
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
-admin.initializeApp();
+// Inicializamos la app
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
+const db = admin.firestore();
+
+// Configuración de transporte (Tus credenciales de OAuth2)
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -14,45 +20,43 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-exports.notificarNuevoLead = async (event) => {
+exports.notificarNuevoLead = async (req, res) => {
   try {
-    console.log("🔔 Función activada. Buscando el lead más reciente en la BD...");
+    console.log("🔔 Función activada. Iniciando búsqueda directa en BD...");
 
-    // ESTRATEGIA INFALIBLE:
-    // Ignoramos los datos del evento (que pueden venir vacíos o en formato raro)
-    // y buscamos directamente en Firestore el último registro creado.
-    
-    const snapshot = await admin.firestore()
-      .collection('leads_corporativos')
-      .orderBy('createdAt', 'desc') // Ordenamos por fecha, el más nuevo primero
+    // 1. Buscamos el último lead registrado que NO tenga la marca de 'emailSent'
+    // Esto garantiza que tomamos el más reciente y que no se ha procesado.
+    const leadsRef = db.collection('leads_corporativos');
+    const snapshot = await leadsRef
+      .orderBy('createdAt', 'desc') // El más reciente primero
       .limit(1)
       .get();
 
     if (snapshot.empty) {
-      console.log("⚠️ No se encontraron leads en la base de datos.");
-      return;
+      console.log("⚠️ No hay leads en la base de datos.");
+      return; // Terminamos sin error
     }
 
-    // Tomamos el documento
     const doc = snapshot.docs[0];
     const data = doc.data();
 
-    // Verificamos si ya le enviamos correo para no repetir
-    if (data.emailSent) {
-      console.log(`✋ El último lead (${data.email}) ya fue procesado anteriormente. Nada que hacer.`);
+    // 2. Verificación de seguridad (Idempotencia)
+    // Si ya le enviamos correo a este lead específico, no hacemos nada.
+    if (data.emailSent === true) {
+      console.log(`✋ El último lead (${data.email}) ya fue notificado previamente.`);
       return;
     }
 
-    console.log(`✅ Lead encontrado: ${data.email} - ${data.company}. Procesando envío...`);
+    console.log(`✅ Procesando nuevo lead encontrado: ${data.email}`);
 
-    // Validación de seguridad
-    const destinatarioVentas = process.env.EMAIL_VENTAS || "contacto@pida-ai.com";
+    // 3. Preparar el correo
+    const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
     
     const mailOptions = {
       from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
       to: destinatarioVentas,
       replyTo: data.email,
-      subject: `🚀 Nuevo Lead: ${data.company || "PIDA"}`,
+      subject: `🚀 Nuevo Lead: ${data.company || "Empresa"}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #1D3557;">Nuevo Cliente Potencial</h2>
@@ -64,20 +68,18 @@ exports.notificarNuevoLead = async (event) => {
           </ul>
           <hr>
           <p><strong>Mensaje:</strong><br>${data.message}</p>
-          <br>
-          <a href="mailto:${data.email}" style="background:#1D3557; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Responder</a>
         </div>
       `
     };
 
-    // 1. Enviamos el correo
+    // 4. Enviar el correo
     await transporter.sendMail(mailOptions);
     console.log(`📧 Correo enviado a ventas.`);
 
-    // 2. IMPORTANTE: Marcamos el documento como "enviado" en la base de datos
-    // Esto evita bucles infinitos o envíos duplicados.
+    // 5. CRUCIAL: Marcar el documento como procesado
+    // Esto evita que si la función se dispara 2 veces, envíe 2 correos.
     await doc.ref.update({ emailSent: true });
-    console.log("📝 Documento marcado como notificado (emailSent: true).");
+    console.log("📝 Documento marcado como completado (emailSent: true).");
 
   } catch (error) {
     console.error("❌ ERROR CRÍTICO:", error);
