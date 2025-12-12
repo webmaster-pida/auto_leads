@@ -16,58 +16,32 @@ const transporter = nodemailer.createTransport({
 
 exports.notificarNuevoLead = async (cloudEvent) => {
   try {
-    console.log("Evento recibido. Iniciando procesamiento...");
+    console.log("🔔 INICIO: Evento recibido.");
 
-    // 1. Extraer los datos del evento de Cloud Run / Eventarc
-    const firestoreData = cloudEvent.data;const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
-
-admin.initializeApp();
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    type: "OAuth2",
-    user: process.env.GMAIL_USER,
-    clientId: process.env.GMAIL_CLIENT_ID,
-    clientSecret: process.env.GMAIL_SECRET,
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN
-  },
-});
-
-exports.notificarNuevoLead = async (cloudEvent) => {
-  try {
-    console.log("🔔 INICIO: Evento recibido en Cloud Run.");
-
-    // 1. Detección segura de los datos
+    // En Cloud Run Functions, los datos de Firestore vienen en cloudEvent.data
     const firestoreData = cloudEvent.data;
 
-    // Si entras por el navegador (HTTP), no hay datos de Firestore, evitamos el crash
     if (!firestoreData || !firestoreData.value) {
-      console.log("⚠️ Aviso: Se accedió a la función sin datos de un evento Firestore (Probablemente visita manual).");
+      console.log("⚠️ Aviso: Solicitud sin datos de Firestore (posible visita manual).");
       return; 
     }
 
-    // 2. Extracción de campos
     const fields = firestoreData.value.fields || {};
     
-    // Log seguro (sin JSON.stringify para evitar errores circulares)
-    console.log("Datos crudos recibidos (campos):", Object.keys(fields));
-
+    // Extracción segura de datos
     const data = {
-      name: fields.name ? fields.name.stringValue : "Sin nombre",
-      company: fields.company ? fields.company.stringValue : "Sin empresa",
+      name: fields.name ? fields.name.stringValue : "No especificado",
+      company: fields.company ? fields.company.stringValue : "No especificado",
       email: fields.email ? fields.email.stringValue : "",
-      phone: fields.phone ? fields.phone.stringValue : "Sin teléfono",
-      message: fields.message ? fields.message.stringValue : "Sin mensaje"
+      phone: fields.phone ? fields.phone.stringValue : "No especificado",
+      message: fields.message ? fields.message.stringValue : "No especificado"
     };
 
     if (!data.email) {
-      console.log("❌ Cancelado: El documento no tiene email.");
+      console.log("❌ Cancelado: El lead no tiene email.");
       return;
     }
 
-    // 3. Envío del correo
     const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
     
     const mailOptions = {
