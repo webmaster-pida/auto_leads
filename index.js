@@ -1,8 +1,10 @@
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
+// Configuración del transporte OAuth2
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -14,32 +16,27 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-exports.notificarNuevoLead = async (cloudEvent) => {
+/**
+ * Usamos el SDK v2 de Firebase.
+ * Este "envoltorio" traduce automáticamente el formato Protobuf de Cloud Run
+ * a un objeto de datos normal que podemos leer.
+ */
+exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", async (event) => {
   try {
-    console.log("🔔 INICIO: Evento recibido.");
+    // ¡La magia! El SDK ya decodificó los datos por nosotros.
+    // event.data es un DocumentSnapshot real.
+    const snapshot = event.data;
 
-    // En Cloud Run Functions, los datos de Firestore vienen en cloudEvent.data
-    const firestoreData = cloudEvent.data;
-
-    if (!firestoreData || !firestoreData.value) {
-      console.log("⚠️ Aviso: Solicitud sin datos de Firestore (posible visita manual).");
-      return; 
+    if (!snapshot) {
+      console.log("No se encontraron datos asociados al evento.");
+      return;
     }
 
-    const fields = firestoreData.value.fields || {};
-    
-    // Extracción segura de datos
-    const data = {
-      name: fields.name ? fields.name.stringValue : "No especificado",
-      company: fields.company ? fields.company.stringValue : "No especificado",
-      email: fields.email ? fields.email.stringValue : "",
-      phone: fields.phone ? fields.phone.stringValue : "No especificado",
-      message: fields.message ? fields.message.stringValue : "No especificado"
-    };
+    const data = snapshot.data(); // Ahora sí podemos usar .data() de nuevo
 
     if (!data.email) {
-      console.log("❌ Cancelado: El lead no tiene email.");
-      return;
+        console.log("Lead sin email, se omite.");
+        return;
     }
 
     const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
@@ -65,9 +62,9 @@ exports.notificarNuevoLead = async (cloudEvent) => {
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`✅ ÉXITO: Correo enviado por el lead de ${data.email}`);
+    console.log(`✅ ÉXITO: Correo enviado por lead de ${data.email}`);
 
   } catch (error) {
     console.error("❌ ERROR:", error);
   }
-};
+});
