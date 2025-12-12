@@ -1,3 +1,4 @@
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
@@ -14,41 +15,22 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-/**
- * Función Robusta: Ignora el formato del evento y busca los datos reales en la BD.
- */
-exports.notificarNuevoLead = async (cloudEvent) => {
+// Usamos el SDK v2 que traduce automáticamente el formato Protobuf
+exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", async (event) => {
   try {
-    console.log("🔔 Evento recibido. ID:", cloudEvent.id);
+    // Si el filtro del activador es correcto (Patrón de ruta),
+    // event.data tendrá el documento.
+    const snapshot = event.data;
 
-    // 1. Obtener la ruta del documento desde el "subject" del evento
-    // El subject se ve como: "projects/.../databases/(default)/documents/leads_corporativos/XYZ123"
-    const subject = cloudEvent.subject;
-    
-    if (!subject || !subject.includes('/documents/')) {
-      console.error("❌ Error: El evento no contiene una ruta de documento válida.", subject);
+    if (!snapshot) {
+      console.log("⚠️ Alerta: El evento llegó vacío. Verifica que el filtro del activador sea 'Patrón de ruta' y no 'Igual'.");
       return;
     }
 
-    // Extraemos todo lo que hay después de "/documents/"
-    const docPath = subject.split('/documents/')[1];
-    console.log("📂 Buscando documento en:", docPath);
+    const data = snapshot.data(); 
 
-    // 2. IR A BUSCAR LOS DATOS LIMPIOS A FIRESTORE
-    // Esto evita cualquier problema con formatos Protobuf o JSON
-    const docSnap = await admin.firestore().doc(docPath).get();
-
-    if (!docSnap.exists) {
-      console.log("⚠️ El documento ya no existe (¿fue borrado?).");
-      return;
-    }
-
-    const data = docSnap.data();
-    console.log("✅ Datos obtenidos correctamente:", data.email);
-
-    // 3. Validación y Envío (Igual que antes)
-    if (!data.email) {
-      console.log("El lead no tiene email, se omite.");
+    if (!data || !data.email) {
+      console.log("El documento no tiene datos o email.");
       return;
     }
 
@@ -63,23 +45,21 @@ exports.notificarNuevoLead = async (cloudEvent) => {
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #1D3557;">Nuevo Cliente Potencial</h2>
           <ul>
-            <li><strong>Nombre:</strong> ${data.name || 'No especificado'}</li>
-            <li><strong>Empresa:</strong> ${data.company || 'No especificado'}</li>
+            <li><strong>Nombre:</strong> ${data.name}</li>
+            <li><strong>Empresa:</strong> ${data.company}</li>
             <li><strong>Email:</strong> ${data.email}</li>
-            <li><strong>Teléfono:</strong> ${data.phone || 'No especificado'}</li>
+            <li><strong>Teléfono:</strong> ${data.phone}</li>
           </ul>
           <hr>
-          <p><strong>Mensaje:</strong><br>${data.message || 'Sin mensaje'}</p>
-          <br>
-          <a href="mailto:${data.email}" style="background:#1D3557; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Responder</a>
+          <p><strong>Mensaje:</strong><br>${data.message}</p>
         </div>
       `
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`✉️ Correo enviado exitosamente para: ${data.email}`);
+    console.log(`✅ ÉXITO TOTAL: Correo enviado por lead de ${data.email}`);
 
   } catch (error) {
-    console.error("❌ ERROR CRÍTICO:", error);
+    console.error("❌ ERROR:", error);
   }
-};
+});
