@@ -1,82 +1,67 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
-// Configuración del transporte usando variables de entorno (process.env)
-// Estas variables las configurarás en la interfaz de Google Cloud.
+// Configuración del transporte
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     type: "OAuth2",
-    user: process.env.GMAIL_USER,           // Tu correo (remitente)
-    clientId: process.env.GMAIL_CLIENT_ID,  // Tu Client ID de GCP
-    clientSecret: process.env.GMAIL_SECRET, // Tu Client Secret de GCP
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN // Tu Refresh Token
+    user: process.env.GMAIL_USER,
+    clientId: process.env.GMAIL_CLIENT_ID,
+    clientSecret: process.env.GMAIL_SECRET,
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN
   },
 });
 
-exports.notificarNuevoLead = functions.firestore
-  .document("leads_corporativos/{docId}")
-  .onCreate(async (snap, context) => {
-    
-    const data = snap.data();
-    const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
+/**
+ * Función estándar para Google Cloud Functions (1ra Gen).
+ * El trigger se configura en la consola, no aquí.
+ */
+exports.notificarNuevoLead = async (snap, context) => {
+  // En 1ra generación, 'snap' ya es el documento y tiene la función .data()
+  const data = snap.data(); 
+  
+  // Si por alguna razón data es undefined (puede pasar en pruebas), salimos
+  if (!data) {
+      console.log("No se recibieron datos del documento.");
+      return;
+  }
 
-    const mailOptions = {
-      from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
-      to: destinatarioVentas,
-      subject: `🚀 Nuevo Lead Corporativo: ${data.company || "Empresa por definir"}`,
-      html: `
-        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+  const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
+
+  const mailOptions = {
+    from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
+    to: destinatarioVentas,
+    subject: `🚀 Nuevo Lead Corporativo: ${data.company || "Empresa por definir"}`,
+    html: `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
           <div style="background-color: #1D3557; padding: 20px; text-align: center;">
-            <h2 style="color: #ffffff; margin: 0; font-weight: 500;">Nuevo Lead Generado</h2>
+            <h2 style="color: #ffffff; margin: 0;">Nuevo Lead Generado</h2>
           </div>
-          
           <div style="padding: 30px;">
-            <p style="font-size: 16px;">Hola equipo,</p>
-            <p style="font-size: 16px; margin-bottom: 25px;">
-              Se ha recibido una nueva solicitud de contacto a través de la plataforma PIDA.
-            </p>
-            
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 10px 0; font-weight: bold; width: 140px; color: #555;">Nombre:</td>
-                <td style="padding: 10px 0;">${data.name}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 10px 0; font-weight: bold; color: #555;">Empresa:</td>
-                <td style="padding: 10px 0;">${data.company}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 10px 0; font-weight: bold; color: #555;">Email:</td>
-                <td style="padding: 10px 0;"><a href="mailto:${data.email}" style="color: #0056B3;">${data.email}</a></td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f0f0f0;">
-                <td style="padding: 10px 0; font-weight: bold; color: #555;">Teléfono:</td>
-                <td style="padding: 10px 0;">${data.phone}</td>
-              </tr>
-            </table>
-
-            <div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #b92f32; border-radius: 4px;">
-              <p style="margin: 0; font-style: italic; color: #555;">"${data.message}"</p>
+            <p>Hola equipo, nueva solicitud recibida:</p>
+            <ul>
+                <li><strong>Nombre:</strong> ${data.name}</li>
+                <li><strong>Empresa:</strong> ${data.company}</li>
+                <li><strong>Email:</strong> <a href="mailto:${data.email}">${data.email}</a></li>
+                <li><strong>Teléfono:</strong> ${data.phone}</li>
+            </ul>
+            <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #b92f32;">
+              <p style="margin: 0; font-style: italic;">"${data.message}"</p>
             </div>
-
-            <div style="margin-top: 35px; text-align: center;">
-              <a href="mailto:${data.email}" style="background-color: #1D3557; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">Responder al Cliente</a>
-            </div>
+            <br>
+            <a href="mailto:${data.email}" style="background-color: #1D3557; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px;">Responder</a>
           </div>
         </div>
-      `,
-    };
+    `,
+  };
 
-    try {
-      await transporter.sendMail(mailOptions);
-      console.log(`Notificación enviada por el lead: ${data.email}`);
-      return null;
-    } catch (error) {
-      console.error("Error crítico al enviar correo:", error);
-      return null;
-    }
-  });
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Correo enviado para: ${data.email}`);
+  } catch (error) {
+    console.error("Error enviando correo:", error);
+  }
+};
