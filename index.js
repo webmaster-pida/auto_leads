@@ -1,4 +1,3 @@
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
@@ -15,31 +14,45 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Usamos el SDK v2 que traduce automáticamente el formato Protobuf
-exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", async (event) => {
+exports.notificarNuevoLead = async (event) => {
   try {
-    // Si el filtro del activador es 'Patrón de ruta', event.data traerá el documento.
-    const snapshot = event.data;
+    console.log("🔔 Función activada. Buscando el lead más reciente en la BD...");
 
-    if (!snapshot) {
-      console.log("⚠️ Alerta: El evento llegó vacío. Verifica que el filtro del activador sea 'Patrón de ruta'.");
+    // ESTRATEGIA INFALIBLE:
+    // Ignoramos los datos del evento (que pueden venir vacíos o en formato raro)
+    // y buscamos directamente en Firestore el último registro creado.
+    
+    const snapshot = await admin.firestore()
+      .collection('leads_corporativos')
+      .orderBy('createdAt', 'desc') // Ordenamos por fecha, el más nuevo primero
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      console.log("⚠️ No se encontraron leads en la base de datos.");
       return;
     }
 
-    const data = snapshot.data(); // El SDK ya tradujo los datos aquí
+    // Tomamos el documento
+    const doc = snapshot.docs[0];
+    const data = doc.data();
 
-    if (!data || !data.email) {
-      console.log("El documento no tiene datos o email.");
+    // Verificamos si ya le enviamos correo para no repetir
+    if (data.emailSent) {
+      console.log(`✋ El último lead (${data.email}) ya fue procesado anteriormente. Nada que hacer.`);
       return;
     }
 
+    console.log(`✅ Lead encontrado: ${data.email} - ${data.company}. Procesando envío...`);
+
+    // Validación de seguridad
     const destinatarioVentas = process.env.EMAIL_VENTAS || "contacto@pida-ai.com";
     
     const mailOptions = {
       from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
       to: destinatarioVentas,
       replyTo: data.email,
-      subject: `🚀 Nuevo Lead: ${data.company || "pida"}`,
+      subject: `🚀 Nuevo Lead: ${data.company || "PIDA"}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #1D3557;">Nuevo Cliente Potencial</h2>
@@ -51,14 +64,22 @@ exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", as
           </ul>
           <hr>
           <p><strong>Mensaje:</strong><br>${data.message}</p>
+          <br>
+          <a href="mailto:${data.email}" style="background:#1D3557; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Responder</a>
         </div>
       `
     };
 
+    // 1. Enviamos el correo
     await transporter.sendMail(mailOptions);
-    console.log(`✅ ÉXITO TOTAL: Correo enviado por lead de ${data.email}`);
+    console.log(`📧 Correo enviado a ventas.`);
+
+    // 2. IMPORTANTE: Marcamos el documento como "enviado" en la base de datos
+    // Esto evita bucles infinitos o envíos duplicados.
+    await doc.ref.update({ emailSent: true });
+    console.log("📝 Documento marcado como notificado (emailSent: true).");
 
   } catch (error) {
-    console.error("❌ ERROR:", error);
+    console.error("❌ ERROR CRÍTICO:", error);
   }
-});
+};
