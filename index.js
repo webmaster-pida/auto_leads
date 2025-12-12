@@ -1,14 +1,14 @@
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 
-// Inicializamos la app
+// Inicializamos la app si no está lista
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
 
-// Configuración de transporte (Tus credenciales de OAuth2)
+// Configuración de transporte
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -22,35 +22,35 @@ const transporter = nodemailer.createTransport({
 
 exports.notificarNuevoLead = async (req, res) => {
   try {
-    console.log("🔔 Función activada. Iniciando búsqueda directa en BD...");
+    console.log("🔔 Función activada. Iniciando búsqueda...");
 
-    // 1. Buscamos el último lead registrado que NO tenga la marca de 'emailSent'
+    // 1. Buscamos el último lead
     const leadsRef = db.collection('leads_corporativos');
     const snapshot = await leadsRef
-      .orderBy('createdAt', 'desc') // El más reciente primero
+      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
 
     if (snapshot.empty) {
       console.log("⚠️ No hay leads en la base de datos.");
-      return; 
+      // IMPORTANTE: Decimos "OK" para que no reintente
+      return res.status(200).send("No hay leads");
     }
 
     const doc = snapshot.docs[0];
     const data = doc.data();
 
-    // 2. Verificación de seguridad (Idempotencia)
+    // 2. Verificación de seguridad
     if (data.emailSent === true) {
       console.log(`✋ El último lead (${data.email}) ya fue notificado previamente.`);
-      return;
+      // IMPORTANTE: Cerramos la conexión aquí también
+      return res.status(200).send("Ya procesado anteriormente");
     }
 
-    console.log(`✅ Procesando nuevo lead: ${data.email} - ${data.company}`);
+    console.log(`✅ Procesando nuevo lead: ${data.email}`);
 
-    // 3. Preparar el correo con DISEÑO PREMIUM
-    const destinatarioVentas = process.env.EMAIL_VENTAS || "contacto@pida-ai.com";
-    
-    // Formateo de fecha para el pie de página
+    // 3. Preparar el correo (Tu diseño bonito)
+    const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
     const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const mailOptions = {
@@ -79,10 +79,7 @@ exports.notificarNuevoLead = async (req, res) => {
         </head>
         <body>
           <div class="container">
-            <div class="header">
-              <h1>Nuevo Cliente Potencial</h1>
-            </div>
-            
+            <div class="header"><h1>Nuevo Cliente Potencial</h1></div>
             <div class="content">
               <p style="margin-bottom: 30px; color: #666; font-size: 15px;">Hola equipo, se ha recibido una nueva solicitud de contacto a través de la plataforma PIDA.</p>
               
@@ -104,14 +101,10 @@ exports.notificarNuevoLead = async (req, res) => {
               </div>
 
               <div class="btn-container">
-                <a href="mailto:${data.email}?subject=Respuesta a su solicitud en PIDA&body=Hola ${data.name},%0D%0A%0D%0AHemos recibido su solicitud..." class="btn">Responder al Cliente</a>
+                <a href="mailto:${data.email}?subject=Respuesta a su solicitud en PIDA" class="btn">Responder al Cliente</a>
               </div>
             </div>
-
-            <div class="footer">
-              Recibido el: ${fecha}<br>
-              © PIDA Platform - Sistema de Notificaciones Automáticas
-            </div>
+            <div class="footer">Recibido el: ${fecha}<br>© PIDA Platform</div>
           </div>
         </body>
         </html>
@@ -126,7 +119,12 @@ exports.notificarNuevoLead = async (req, res) => {
     await doc.ref.update({ emailSent: true });
     console.log("📝 Documento marcado como completado.");
 
+    // IMPORTANTE: Confirmamos éxito para detener la ejecución
+    return res.status(200).send("Procesado exitosamente");
+
   } catch (error) {
     console.error("❌ ERROR CRÍTICO:", error);
+    // En caso de error real, enviamos 500 para que SÍ reintente si es un fallo temporal
+    return res.status(500).send(error.toString());
   }
 };
