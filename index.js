@@ -29,12 +29,12 @@ exports.notificarNuevoLead = async (snap, context) => {
       return;
   }
 
-  const destinatarioVentas = process.env.EMAIL_VENTAS || "ventas@tuempresa.com";
+  const destinatarioVentas = process.env.EMAIL_VENTAS || "contacto@pida-ai.com";
 
   const mailOptions = {
     from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
     to: destinatarioVentas,
-    subject: `🚀 Nuevo Lead Corporativo: ${data.company || "Empresa por definir"}`,
+    subject: `🚀 Nuevo Lead Corporativo: ${data.company || "PIDA"}`,
     html: `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; border: 1px solid #e0e0e0; border-radius: 8px;">
           <div style="background-color: #1D3557; padding: 20px; text-align: center;">
