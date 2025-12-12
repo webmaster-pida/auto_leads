@@ -18,16 +18,15 @@ const transporter = nodemailer.createTransport({
 // Usamos el SDK v2 que traduce automáticamente el formato Protobuf
 exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", async (event) => {
   try {
-    // Si el filtro del activador es correcto (Patrón de ruta),
-    // event.data tendrá el documento.
+    // Si el filtro del activador es 'Patrón de ruta', event.data traerá el documento.
     const snapshot = event.data;
 
     if (!snapshot) {
-      console.log("⚠️ Alerta: El evento llegó vacío. Verifica que el filtro del activador sea 'Patrón de ruta' y no 'Igual'.");
+      console.log("⚠️ Alerta: El evento llegó vacío. Verifica que el filtro del activador sea 'Patrón de ruta'.");
       return;
     }
 
-    const data = snapshot.data(); 
+    const data = snapshot.data(); // El SDK ya tradujo los datos aquí
 
     if (!data || !data.email) {
       console.log("El documento no tiene datos o email.");
@@ -40,7 +39,7 @@ exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", as
       from: `"PIDA Notificaciones" <${process.env.GMAIL_USER}>`,
       to: destinatarioVentas,
       replyTo: data.email,
-      subject: `🚀 Nuevo Lead: ${data.company || "PIDA"}`,
+      subject: `🚀 Nuevo Lead: ${data.company || "pida"}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #1D3557;">Nuevo Cliente Potencial</h2>
