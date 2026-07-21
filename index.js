@@ -38,7 +38,7 @@ exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", as
     console.log(`✅ Procesando nuevo lead: ${data.email}`);
 
     // 3. Preparar el correo
-    const destinatarioVentas = "contacto@pida-ai.com, durquilla@pida-ai.com, fgalaviz@iiresodh.org, cumapineiros@gmail.com";
+    const destinatarioVentas = "contacto@pida-ai.com, durquilla@pida-ai.com, durquilla@iiresodh.org;
     const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const mailOptions = {
