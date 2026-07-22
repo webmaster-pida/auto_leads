@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
+const functions = require("firebase-functions"); // <-- Importamos v1
 const nodemailer = require("nodemailer");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 
 // Inicializamos la app si no está lista
 if (!admin.apps.length) {
@@ -19,26 +19,27 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// TRIGGER: Se ejecuta automáticamente CADA VEZ que se crea un documento en la colección
-exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", async (event) => {
+// TRIGGER V1: Lee directo de Firestore, sin pasar por Eventarc
+exports.notificarNuevoLead = functions.firestore
+  .document("leads_corporativos/{leadId}")
+  .onCreate(async (snapshot, context) => {
   try {
-    // 1. Obtenemos directamente los datos del documento recién creado
-    const data = event.data.data();
-    // Obtenemos la referencia para actualizarlo después
-    const docRef = event.data.ref; 
+    // En v1, los datos están garantizados dentro de snapshot
+    const data = snapshot.data();
+    const docRef = snapshot.ref; 
 
     console.log("🔔 Nuevo lead detectado automáticamente. Iniciando proceso...");
 
-    // 2. Verificación de seguridad (por si el evento se dispara duplicado por red)
+    // Verificación de seguridad
     if (data.emailSent === true) {
       console.log(`✋ El lead (${data.email}) ya fue notificado previamente.`);
-      return; 
+      return null; 
     }
 
     console.log(`✅ Procesando nuevo lead: ${data.email}`);
 
-    // 3. Preparar el correo
-    const destinatarioVentas = "contacto@pida-ai.com, durquilla@pida-ai.com, durquilla@iiresodh.org;
+    // Preparar el correo
+    const destinatarioVentas = "contacto@pida-ai.com, durquilla@pida-ai.com, fgalaviz@iiresodh.org, cumapineiros@gmail.com";
     const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const mailOptions = {
@@ -99,19 +100,18 @@ exports.notificarNuevoLead = onDocumentCreated("leads_corporativos/{leadId}", as
       `
     };
 
-    // 4. Enviar el correo
+    // Enviar el correo
     await transporter.sendMail(mailOptions);
     console.log(`📧 Correo enviado a ventas.`);
 
-    // 5. Marcar como procesado usando la referencia directa del documento
+    // Marcar como procesado
     await docRef.update({ emailSent: true });
     console.log("📝 Documento marcado como completado.");
 
-    return; // Los triggers no usan res.send(), simplemente terminan con return
+    return null; 
 
   } catch (error) {
     console.error("❌ ERROR CRÍTICO:", error);
-    // Lanzar el error permite que los registros de Firebase lo detecten como una ejecución fallida
-    throw new Error(error.toString()); 
+    return null;
   }
 });
