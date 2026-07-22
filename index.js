@@ -36,7 +36,7 @@ exports.notificarNuevoLead = async (req, res) => {
 
     console.log(`✅ Se encontraron ${snapshot.size} leads pendientes. Procesando...`);
 
-    const destinatarioVentas = "contacto@pida-ai.com, durquilla@iiresodh.org, cumapineiros@gmail.com";
+    const destinatarioVentas = "contacto@pida-ai.com;
     const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     // 2. Procesamos cada lead pendiente uno por uno
